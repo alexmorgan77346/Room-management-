@@ -80,6 +80,32 @@
   dialog { background: var(--card); color: var(--text); }
   input, select, textarea { background: #fffdf9; color: var(--text); }
   .no-data { text-align: center; color: var(--muted); padding: 40px 10px; grid-column: 1/-1; }
+
+  /* ---------- PDF / print sheet ---------- */
+  #printSheet { display: none; }
+  @media print {
+    @page { size: A4; margin: 14mm; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: #fff; }
+    header, main, dialog { display: none !important; }
+    #printSheet { display: block; font-family: Georgia, "Times New Roman", serif; color: #3b2a20; }
+    .ps-head { text-align: center; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 3px double #c8a27a; }
+    .ps-head .cup { font-size: 26px; }
+    .ps-head h1 { font-size: 26px; color: #4a2e1c; letter-spacing: 1px; }
+    .ps-head p { font-size: 12px; color: #8a7260; margin-top: 4px; }
+    .ps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .ps-room { border: 1.5px solid #c8a27a; border-radius: 10px; overflow: hidden; background: #fffaf4; break-inside: avoid; page-break-inside: avoid; }
+    .ps-title { background: #4a2e1c; color: #f5ede3; padding: 8px 12px; display: flex; justify-content: space-between; align-items: baseline; }
+    .ps-title b { font-size: 16px; }
+    .ps-title span { font-size: 11px; opacity: .85; }
+    .ps-note { font-size: 11px; font-style: italic; color: #8a7260; padding: 6px 12px 0; }
+    .ps-body { padding: 8px 12px 10px; }
+    .ps-fam { margin-bottom: 7px; }
+    .ps-fam h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #7b4a2d; border-bottom: 1px dotted #c8a27a; margin-bottom: 3px; padding-bottom: 2px; }
+    .ps-fam div { font-size: 13px; padding: 1.5px 0; }
+    .ps-empty { font-size: 12px; color: #a99480; font-style: italic; padding: 4px 0; }
+    .ps-foot { text-align: center; font-size: 10px; color: #a99480; margin-top: 14px; }
+  }
 </style>
 </head>
 <body>
@@ -105,11 +131,14 @@
       <option value="partial">Partly filled</option>
       <option value="full">Full</option>
     </select>
+    <button class="btn-light" id="pdfBtn">📄 Create PDF</button>
     <button class="btn-primary" id="addRoomBtn">+ Add Room</button>
   </div>
 
   <div class="rooms" id="rooms"></div>
 </main>
+
+<div id="printSheet"></div>
 
 <!-- Room dialog -->
 <dialog id="roomDlg">
@@ -311,6 +340,33 @@
     else data.people.push({ id: uid("p"), ...obj });
     save(); render();
   });
+
+  // ---------- PDF ----------
+  function createPdf() {
+    if (!data.rooms.length) { alert("Add a room first."); return; }
+    const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    const cards = data.rooms.map(r => {
+      const ppl = peopleIn(r.id);
+      const groups = {};
+      ppl.forEach(p => { (groups[p.family.trim()] = groups[p.family.trim()] || []).push(p); });
+      const keys = Object.keys(groups).sort((a, b) => (a === "") - (b === "") || a.localeCompare(b));
+      const body = keys.length
+        ? keys.map(k => `<div class="ps-fam"><h4>${k ? esc(k) : "Individuals"}</h4>${groups[k].map(p => `<div>• ${esc(p.name)}</div>`).join("")}</div>`).join("")
+        : `<div class="ps-empty">— empty —</div>`;
+      return `<div class="ps-room">
+        <div class="ps-title"><b>${esc(r.name)}</b><span>${ppl.length} / ${r.capacity} people</span></div>
+        ${r.note ? `<div class="ps-note">${esc(r.note)}</div>` : ""}
+        <div class="ps-body">${body}</div>
+      </div>`;
+    }).join("");
+    $("printSheet").innerHTML = `
+      <div class="ps-head"><div class="cup">☕</div><h1>Room List</h1>
+        <p>${data.rooms.length} rooms • ${data.people.length} people • ${date}</p></div>
+      <div class="ps-grid">${cards}</div>
+      <div class="ps-foot">Room Manager</div>`;
+    window.print(); // choose “Save as PDF” in the print window
+  }
+  $("pdfBtn").onclick = createPdf;
 
   // ---------- Events ----------
   $("addRoomBtn").onclick = () => openRoom();
