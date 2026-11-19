@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Room Manager</title>
+<style>
+  :root {
+    --bg: #f5ede3;
+    --card: #fffaf4;
+    --text: #3b2a20;
+    --muted: #8a7260;
+    --primary: #7b4a2d;
+    --primary-dark: #5e3820;
+    --green: #5f7a3a;
+    --orange: #b8741a;
+    --red: #a63d2f;
+    --border: #e6d6c3;
+    --shadow: 0 2px 10px rgba(91,56,32,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; }
+  header { background: #4a2e1c; color: #f5ede3; padding: 22px 16px; border-bottom: 4px solid #c8a27a; }
+  header h1 { font-size: 1.5rem; letter-spacing: .3px; }
+  header p { opacity: .85; font-size: .9rem; margin-top: 2px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--card); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); text-align: center; }
+  .stat b { display: block; font-size: 1.6rem; color: var(--primary); }
+  .stat span { font-size: .8rem; color: var(--muted); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .toolbar input, .toolbar select { flex: 1; min-width: 160px; }
+  input, select, textarea { padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: #fff; font-family: inherit; width: 100%; }
+  input:focus, select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+  button { cursor: pointer; border: none; border-radius: 8px; padding: 10px 14px; font-size: .9rem; font-weight: 600; font-family: inherit; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-light { background: #f0e1cf; color: var(--primary); }
+  .btn-danger { background: #f3d9d3; color: var(--red); }
+  .btn-sm { padding: 6px 10px; font-size: .8rem; }
+
+  .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .room { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .room-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .room-head h3 { font-size: 1.1rem; }
+  .room-head small { color: var(--muted); }
+  .badge { font-size: .75rem; padding: 3px 9px; border-radius: 99px; font-weight: 700; white-space: nowrap; }
+  .b-empty { background: #e5ecd6; color: var(--green); }
+  .b-partial { background: #f6e3c4; color: var(--orange); }
+  .b-full { background: #f3d9d3; color: var(--red); }
+
+  .bar { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .bar div { height: 100%; background: var(--green); transition: width .3s; }
+  .bar div.mid { background: var(--orange); }
+  .bar div.full { background: var(--red); }
+
+  .family { background: #f8efe3; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+  .family h4 { font-size: .85rem; color: var(--primary); margin-bottom: 4px; }
+  .person { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 0; border-top: 1px dashed var(--border); font-size: .9rem; }
+  .person:first-of-type { border-top: none; }
+  .person .info small { display: block; color: var(--muted); font-size: .75rem; }
+  .actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .empty-text { color: var(--muted); font-size: .85rem; text-align: center; padding: 10px; }
+  .room-foot { display: flex; gap: 8px; margin-top: auto; }
+  .room-foot button { flex: 1; }
+
+  dialog { border: none; border-radius: 14px; padding: 20px; width: min(440px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.3); margin: auto; }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin-bottom: 12px; font-size: 1.15rem; }
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 3px; }
+  .row { display: flex; gap: 10px; }
+  .row .field { flex: 1; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .modal-actions button[type=button] { background: #eadccb; color: var(--text); }
+  dialog { background: var(--card); color: var(--text); }
+  input, select, textarea { background: #fffdf9; color: var(--text); }
+  .no-data { text-align: center; color: var(--muted); padding: 40px 10px; grid-column: 1/-1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 Room Manager</h1>
+  <p>☕ Rooms, people and families • saved automatically on this device</p>
+</header>
+
+<main>
+  <div class="stats">
+    <div class="stat"><b id="sRooms">0</b><span>Rooms</span></div>
+    <div class="stat"><b id="sPeople">0</b><span>People</span></div>
+    <div class="stat"><b id="sFamilies">0</b><span>Families</span></div>
+    <div class="stat"><b id="sFree">0</b><span>Free beds</span></div>
+  </div>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="🔍 Search person, family or room...">
+    <select id="filter">
+      <option value="all">All rooms</option>
+      <option value="empty">Empty</option>
+      <option value="partial">Partly filled</option>
+      <option value="full">Full</option>
+    </select>
+    <button class="btn-primary" id="addRoomBtn">+ Add Room</button>
+  </div>
+
+  <div class="rooms" id="rooms"></div>
+</main>
+
+<!-- Room dialog -->
+<dialog id="roomDlg">
+  <form method="dialog" id="roomForm">
+    <h2 id="roomTitle">Add Room</h2>
+    <div class="field"><label>Room name / number *</label><input id="rName" required placeholder="e.g. Room 101"></div>
+    <div class="field"><label>Capacity (people) *</label><input id="rCap" type="number" min="1" value="4" required></div>
+    <div class="field"><label>Note</label><input id="rNote" placeholder="Any note about this room"></div>
+    <div class="modal-actions">
+      <button type="button" data-close>Cancel</button>
+      <button class="btn-primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Person dialog -->
+<dialog id="personDlg">
+  <form method="dialog" id="personForm">
+    <h2 id="personTitle">Add Person</h2>
+    <div class="field"><label>Name *</label><input id="pName" required></div>
+    <div class="field">
+      <label>Family name (leave empty if single)</label>
+      <input id="pFam" list="famList" placeholder="e.g. Sharma Family">
+      <datalist id="famList"></datalist>
+    </div>
+    <div class="field"><label>Room</label><select id="pRoom"></select></div>
+    <div class="modal-actions">
+      <button type="button" data-close>Cancel</button>
+      <button class="btn-primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function () {
+  const KEY = "roomManagerData_v1";
+  let data = load();
+  let editingRoom = null, editingPerson = null, defaultRoomForPerson = null;
+
+  const $ = id => document.getElementById(id);
+
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(KEY));
+      if (d && d.rooms && d.people) return d;
+    } catch (e) {}
+    return {
+      rooms: [
+        { id: "r1", name: "Room 101", capacity: 4, note: "" },
+        { id: "r2", name: "Room 102", capacity: 3, note: "" }
+      ],
+      people: [
+        { id: "p1", roomId: "r1", name: "Ramesh", family: "Sharma Family" },
+        { id: "p2", roomId: "r1", name: "Sunita", family: "Sharma Family" },
+        { id: "p3", roomId: "r1", name: "Aman", family: "Sharma Family" }
+      ]
+    };
+  }
+  function save() { localStorage.setItem(KEY, JSON.stringify(data)); }
+  function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+  function peopleIn(roomId) { return data.people.filter(p => p.roomId === roomId); }
+  function status(room) {
+    const n = peopleIn(room.id).length;
+    if (n === 0) return "empty";
+    if (n >= room.capacity) return "full";
+    return "partial";
+  }
+
+  function render() {
+    const q = $("search").value.trim().toLowerCase();
+    const f = $("filter").value;
+
+    // stats
+    const totalCap = data.rooms.reduce((a, r) => a + r.capacity, 0);
+    const families = new Set(data.people.map(p => p.family.trim().toLowerCase()).filter(Boolean));
+    $("sRooms").textContent = data.rooms.length;
+    $("sPeople").textContent = data.people.length;
+    $("sFamilies").textContent = families.size;
+    $("sFree").textContent = Math.max(0, totalCap - data.people.length);
+
+    // family suggestions
+    $("famList").innerHTML = [...new Set(data.people.map(p => p.family.trim()).filter(Boolean))]
+      .map(n => `<option value="${esc(n)}">`).join("");
+
+    const list = data.rooms.filter(r => {
+      if (f !== "all" && status(r) !== f) return false;
+      if (!q) return true;
+      if ((r.name + " " + (r.note || "")).toLowerCase().includes(q)) return true;
+      return peopleIn(r.id).some(p => (p.name + " " + p.family).toLowerCase().includes(q));
+    });
+
+    if (!list.length) {
+      $("rooms").innerHTML = `<div class="no-data">No rooms found. Click “+ Add Room” to start.</div>`;
+      return;
+    }
+
+    $("rooms").innerHTML = list.map(r => {
+      const ppl = peopleIn(r.id);
+      const st = status(r);
+      const pct = Math.min(100, Math.round(ppl.length / r.capacity * 100));
+      const label = { empty: "Empty", partial: "Partly filled", full: "Full" }[st];
+      const cls = { empty: "b-empty", partial: "b-partial", full: "b-full" }[st];
+      const barCls = st === "full" ? "full" : st === "partial" ? "mid" : "";
+
+      // group by family
+      const groups = {};
+      ppl.forEach(p => {
+        const key = p.family.trim() || "";
+        (groups[key] = groups[key] || []).push(p);
+      });
+      const keys = Object.keys(groups).sort((a, b) => (a === "") - (b === "") || a.localeCompare(b));
+
+      const body = keys.length ? keys.map(k => `
+        <div class="family">
+          <h4>${k ? "👨‍👩‍👧 " + esc(k) + " (" + groups[k].length + ")" : "🧍 Individuals"}</h4>
+          ${groups[k].map(p => `
+            <div class="person">
+              <div class="info">
+                <b>${esc(p.name)}</b>
+              </div>
+              <div class="actions">
+                <button class="btn-light btn-sm" data-act="editP" data-id="${p.id}" title="Edit / move">✏️</button>
+                <button class="btn-danger btn-sm" data-act="delP" data-id="${p.id}" title="Remove">🗑</button>
+              </div>
+            </div>`).join("")}
+        </div>`).join("") : `<div class="empty-text">No one in this room</div>`;
+
+      return `
+        <div class="room">
+          <div class="room-head">
+            <div>
+              <h3>${esc(r.name)}</h3>
+              <small>${esc(r.note)}</small>
+            </div>
+            <span class="badge ${cls}">${label}</span>
+          </div>
+          <div><small>${ppl.length} / ${r.capacity} occupied</small>
+            <div class="bar"><div class="${barCls}" style="width:${pct}%"></div></div></div>
+          ${body}
+          <div class="room-foot">
+            <button class="btn-primary btn-sm" data-act="addP" data-id="${r.id}" ${st === "full" ? "disabled style='opacity:.5;cursor:not-allowed'" : ""}>+ Add Person</button>
+            <button class="btn-light btn-sm" data-act="editR" data-id="${r.id}">Edit Room</button>
+            <button class="btn-danger btn-sm" data-act="delR" data-id="${r.id}">Delete</button>
+          </div>
+        </div>`;
+    }).join("");
+  }
+
+  // ---------- Room ----------
+  function openRoom(room) {
+    editingRoom = room || null;
+    $("roomTitle").textContent = room ? "Edit Room" : "Add Room";
+    $("rName").value = room ? room.name : "";
+    $("rCap").value = room ? room.capacity : 4;
+    $("rNote").value = room ? room.note : "";
+    $("roomDlg").showModal();
+  }
+  $("roomForm").addEventListener("submit", () => {
+    const cap = Math.max(1, parseInt($("rCap").value) || 1);
+    const obj = { name: $("rName").value.trim(), capacity: cap, note: $("rNote").value.trim() };
+    if (!obj.name) return;
+    if (editingRoom) {
+      const used = peopleIn(editingRoom.id).length;
+      if (cap < used) { alert(`This room already has ${used} people. Capacity cannot be less.`); obj.capacity = used; }
+      Object.assign(editingRoom, obj);
+    } else {
+      data.rooms.push({ id: uid("r"), ...obj });
+    }
+    save(); render();
+  });
+
+  // ---------- Person ----------
+  function fillRoomSelect(selected, personId) {
+    $("pRoom").innerHTML = data.rooms.map(r => {
+      const n = peopleIn(r.id).filter(p => p.id !== personId).length;
+      const full = n >= r.capacity;
+      return `<option value="${r.id}" ${r.id === selected ? "selected" : ""} ${full ? "disabled" : ""}>${esc(r.name)} (${n}/${r.capacity})${full ? " – full" : ""}</option>`;
+    }).join("");
+  }
+  function openPerson(person, roomId) {
+    if (!data.rooms.length) { alert("Add a room first."); return; }
+    editingPerson = person || null;
+    $("personTitle").textContent = person ? "Edit / Move Person" : "Add Person";
+    $("pName").value = person ? person.name : "";
+    $("pFam").value = person ? person.family : "";
+    fillRoomSelect(person ? person.roomId : roomId, person ? person.id : null);
+    $("personDlg").showModal();
+  }
+  $("personForm").addEventListener("submit", () => {
+    const obj = {
+      name: $("pName").value.trim(),
+      family: $("pFam").value.trim(),
+      roomId: $("pRoom").value
+    };
+    if (!obj.name || !obj.roomId) return;
+    if (editingPerson) Object.assign(editingPerson, obj);
+    else data.people.push({ id: uid("p"), ...obj });
+    save(); render();
+  });
+
+  // ---------- Events ----------
+  $("addRoomBtn").onclick = () => openRoom();
+  $("search").oninput = render;
+  $("filter").onchange = render;
+  document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+
+  $("rooms").addEventListener("click", e => {
+    const b = e.target.closest("button[data-act]");
+    if (!b || b.disabled) return;
+    const id = b.dataset.id, act = b.dataset.act;
+    if (act === "addP") openPerson(null, id);
+    if (act === "editP") openPerson(data.people.find(p => p.id === id));
+    if (act === "delP") {
+      const p = data.people.find(x => x.id === id);
+      if (confirm(`Remove ${p.name} from the room?`)) { data.people = data.people.filter(x => x.id !== id); save(); render(); }
+    }
+    if (act === "editR") openRoom(data.rooms.find(r => r.id === id));
+    if (act === "delR") {
+      const r = data.rooms.find(x => x.id === id);
+      const n = peopleIn(id).length;
+      if (confirm(`Delete ${r.name}${n ? " and remove its " + n + " people" : ""}?`)) {
+        data.rooms = data.rooms.filter(x => x.id !== id);
+        data.people = data.people.filter(p => p.roomId !== id);
+        save(); render();
+      }
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
