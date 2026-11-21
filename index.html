@@ -105,6 +105,9 @@
     .ps-fam div { font-size: 13px; padding: 1.5px 0; }
     .ps-empty { font-size: 12px; color: #a99480; font-style: italic; padding: 4px 0; }
     .ps-foot { text-align: center; font-size: 10px; color: #a99480; margin-top: 14px; }
+    .ps-hotel { margin-bottom: 18px; }
+    .ps-hname { display: flex; justify-content: space-between; align-items: baseline; font-size: 17px; color: #7b4a2d; border-bottom: 2px solid #c8a27a; margin-bottom: 9px; padding-bottom: 3px; break-after: avoid; page-break-after: avoid; }
+    .ps-hname span { font-size: 11px; color: #8a7260; }
   }
 </style>
 </head>
@@ -131,6 +134,7 @@
       <option value="partial">Partly filled</option>
       <option value="full">Full</option>
     </select>
+    <select id="hotelFilter"><option value="all">All hotels</option></select>
     <button class="btn-light" id="pdfBtn">📄 Create PDF</button>
     <button class="btn-primary" id="addRoomBtn">+ Add Room</button>
   </div>
@@ -144,6 +148,7 @@
 <dialog id="roomDlg">
   <form method="dialog" id="roomForm">
     <h2 id="roomTitle">Add Room</h2>
+    <div class="field"><label>Hotel name *</label><input id="rHotel" list="hotelList" required placeholder="e.g. Hotel Sunrise"><datalist id="hotelList"></datalist></div>
     <div class="field"><label>Room name / number *</label><input id="rName" required placeholder="e.g. Room 101"></div>
     <div class="field"><label>Capacity (people) *</label><input id="rCap" type="number" min="1" value="4" required></div>
     <div class="field"><label>Note</label><input id="rNote" placeholder="Any note about this room"></div>
@@ -187,8 +192,8 @@
     } catch (e) {}
     return {
       rooms: [
-        { id: "r1", name: "Room 101", capacity: 4, note: "" },
-        { id: "r2", name: "Room 102", capacity: 3, note: "" }
+        { id: "r1", hotel: "Hotel Sunrise", name: "Room 101", capacity: 4, note: "" },
+        { id: "r2", hotel: "Hotel Sunrise", name: "Room 102", capacity: 3, note: "" }
       ],
       people: [
         { id: "p1", roomId: "r1", name: "Ramesh", family: "Sharma Family" },
@@ -225,10 +230,19 @@
     $("famList").innerHTML = [...new Set(data.people.map(p => p.family.trim()).filter(Boolean))]
       .map(n => `<option value="${esc(n)}">`).join("");
 
+    // hotel suggestions + hotel filter
+    const hotels = [...new Set(data.rooms.map(r => (r.hotel || "").trim()).filter(Boolean))].sort();
+    $("hotelList").innerHTML = hotels.map(h => `<option value="${esc(h)}">`).join("");
+    const hf = $("hotelFilter"), curHotel = hf.value;
+    hf.innerHTML = `<option value="all">All hotels</option>` + hotels.map(h => `<option value="${esc(h)}">${esc(h)}</option>`).join("");
+    hf.value = hotels.includes(curHotel) ? curHotel : "all";
+    const hv = hf.value;
+
     const list = data.rooms.filter(r => {
       if (f !== "all" && status(r) !== f) return false;
+      if (hv !== "all" && (r.hotel || "").trim() !== hv) return false;
       if (!q) return true;
-      if ((r.name + " " + (r.note || "")).toLowerCase().includes(q)) return true;
+      if (((r.hotel || "") + " " + r.name + " " + (r.note || "")).toLowerCase().includes(q)) return true;
       return peopleIn(r.id).some(p => (p.name + " " + p.family).toLowerCase().includes(q));
     });
 
@@ -273,7 +287,8 @@
           <div class="room-head">
             <div>
               <h3>${esc(r.name)}</h3>
-              <small>${esc(r.note)}</small>
+              <small style="display:block">🏨 ${esc(r.hotel || "No hotel")}</small>
+              ${r.note ? `<small style="display:block">${esc(r.note)}</small>` : ""}
             </div>
             <span class="badge ${cls}">${label}</span>
           </div>
@@ -293,6 +308,7 @@
   function openRoom(room) {
     editingRoom = room || null;
     $("roomTitle").textContent = room ? "Edit Room" : "Add Room";
+    $("rHotel").value = room ? (room.hotel || "") : ($("hotelFilter").value !== "all" ? $("hotelFilter").value : "");
     $("rName").value = room ? room.name : "";
     $("rCap").value = room ? room.capacity : 4;
     $("rNote").value = room ? room.note : "";
@@ -300,7 +316,7 @@
   }
   $("roomForm").addEventListener("submit", () => {
     const cap = Math.max(1, parseInt($("rCap").value) || 1);
-    const obj = { name: $("rName").value.trim(), capacity: cap, note: $("rNote").value.trim() };
+    const obj = { hotel: $("rHotel").value.trim(), name: $("rName").value.trim(), capacity: cap, note: $("rNote").value.trim() };
     if (!obj.name) return;
     if (editingRoom) {
       const used = peopleIn(editingRoom.id).length;
@@ -345,7 +361,7 @@
   function createPdf() {
     if (!data.rooms.length) { alert("Add a room first."); return; }
     const date = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-    const cards = data.rooms.map(r => {
+    const roomCard = r => {
       const ppl = peopleIn(r.id);
       const groups = {};
       ppl.forEach(p => { (groups[p.family.trim()] = groups[p.family.trim()] || []).push(p); });
@@ -358,11 +374,17 @@
         ${r.note ? `<div class="ps-note">${esc(r.note)}</div>` : ""}
         <div class="ps-body">${body}</div>
       </div>`;
+    };
+    const hotelNames = [...new Set(data.rooms.map(r => (r.hotel || "").trim()))].sort((a, b) => (a === "") - (b === "") || a.localeCompare(b));
+    const cards = hotelNames.map(h => {
+      const rs = data.rooms.filter(r => (r.hotel || "").trim() === h);
+      const total = rs.reduce((a, r) => a + peopleIn(r.id).length, 0);
+      return `<div class="ps-hotel"><div class="ps-hname"><b>🏨 ${esc(h || "No hotel")}</b><span>${rs.length} rooms • ${total} people</span></div><div class="ps-grid">${rs.map(roomCard).join("")}</div></div>`;
     }).join("");
     $("printSheet").innerHTML = `
       <div class="ps-head"><div class="cup">☕</div><h1>Room List</h1>
         <p>${data.rooms.length} rooms • ${data.people.length} people • ${date}</p></div>
-      <div class="ps-grid">${cards}</div>
+      ${cards}
       <div class="ps-foot">Room Manager</div>`;
     window.print(); // choose “Save as PDF” in the print window
   }
@@ -382,22 +404,4 @@
     if (act === "editP") openPerson(data.people.find(p => p.id === id));
     if (act === "delP") {
       const p = data.people.find(x => x.id === id);
-      if (confirm(`Remove ${p.name} from the room?`)) { data.people = data.people.filter(x => x.id !== id); save(); render(); }
-    }
-    if (act === "editR") openRoom(data.rooms.find(r => r.id === id));
-    if (act === "delR") {
-      const r = data.rooms.find(x => x.id === id);
-      const n = peopleIn(id).length;
-      if (confirm(`Delete ${r.name}${n ? " and remove its " + n + " people" : ""}?`)) {
-        data.rooms = data.rooms.filter(x => x.id !== id);
-        data.people = data.people.filter(p => p.roomId !== id);
-        save(); render();
-      }
-    }
-  });
-
-  render();
-})();
-</script>
-</body>
-</html>
+      if (confirm(`Remove ${p.name} from the room?`)) { data.people = data.people.filter(x => x
