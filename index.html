@@ -394,6 +394,7 @@
   $("addRoomBtn").onclick = () => openRoom();
   $("search").oninput = render;
   $("filter").onchange = render;
+  $("hotelFilter").onchange = render;
   document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
 
   $("rooms").addEventListener("click", e => {
@@ -404,4 +405,22 @@
     if (act === "editP") openPerson(data.people.find(p => p.id === id));
     if (act === "delP") {
       const p = data.people.find(x => x.id === id);
-      if (confirm(`Remove ${p.name} from the room?`)) { data.people = data.people.filter(x => x
+      if (confirm(`Remove ${p.name} from the room?`)) { data.people = data.people.filter(x => x.id !== id); save(); render(); }
+    }
+    if (act === "editR") openRoom(data.rooms.find(r => r.id === id));
+    if (act === "delR") {
+      const r = data.rooms.find(x => x.id === id);
+      const n = peopleIn(id).length;
+      if (confirm(`Delete ${r.name}${n ? " and remove its " + n + " people" : ""}?`)) {
+        data.rooms = data.rooms.filter(x => x.id !== id);
+        data.people = data.people.filter(p => p.roomId !== id);
+        save(); render();
+      }
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
